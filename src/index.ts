@@ -1,22 +1,12 @@
-import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { prune, upsert } from "./registry.js";
+import { load, prune, upsert } from "./registry.js";
+import { spawnAndSwap } from "./swap.js";
+
+const SELF = fileURLToPath(import.meta.url);
 
 function inTmux(): boolean {
 	return Boolean(process.env.TMUX && process.env.TMUX_PANE);
-}
-
-function currentTmuxSession(): string | undefined {
-	try {
-		const out = execFileSync(
-			"tmux",
-			["display-message", "-p", "-t", process.env.TMUX_PANE!, "-F", "#{session_name}"],
-			{ encoding: "utf8" },
-		);
-		return out.trim() || undefined;
-	} catch {
-		return undefined;
-	}
 }
 
 export default function (pi: ExtensionAPI) {
@@ -24,18 +14,30 @@ export default function (pi: ExtensionAPI) {
 		if (!inTmux()) return;
 		prune();
 		const sessionFile = ctx.sessionManager.getSessionFile();
-		const tmuxSession = currentTmuxSession();
-		if (!sessionFile || !tmuxSession) {
+		if (!sessionFile) {
 			ctx.ui.notify("pi-mux active", "info");
 			return;
 		}
 		upsert({
-			tmuxSession,
 			paneId: process.env.TMUX_PANE!,
 			sessionFile,
 			cwd: ctx.cwd,
 			pid: process.pid,
 		});
 		ctx.ui.notify("pi-mux active", "info");
+	});
+
+	pi.on("session_before_switch", async (event, ctx) => {
+		if (!inTmux()) return;
+		if (event.reason !== "resume") return;
+		const target = event.targetSessionFile;
+		if (!target) return;
+		const existing = load().find((e) => e.sessionFile === target);
+		if (existing) {
+			ctx.ui.notify("already open in another pi-mux session, use /switch", "error");
+			return { cancel: true };
+		}
+		spawnAndSwap(`pi -e ${SELF} --session ${target}`, ctx.cwd);
+		return { cancel: true };
 	});
 }

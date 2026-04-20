@@ -4,7 +4,6 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 export interface Entry {
-	tmuxSession: string;
 	paneId: string;
 	sessionFile: string;
 	cwd: string;
@@ -29,25 +28,25 @@ export function save(entries: Entry[]): void {
 }
 
 export function upsert(entry: Entry): void {
-	const entries = load().filter((e) => e.tmuxSession !== entry.tmuxSession);
+	const entries = load().filter((e) => e.paneId !== entry.paneId);
 	entries.push(entry);
 	save(entries);
 }
 
-export function remove(tmuxSession: string): void {
-	save(load().filter((e) => e.tmuxSession !== tmuxSession));
+export function remove(paneId: string): void {
+	save(load().filter((e) => e.paneId !== paneId));
 }
 
 export function prune(): Entry[] {
-	const live = listTmuxSessions();
-	const entries = load().filter((e) => live.has(e.tmuxSession));
+	const live = livePanes();
+	const entries = load().filter((e) => live.has(e.paneId));
 	save(entries);
 	return entries;
 }
 
-function listTmuxSessions(): Set<string> {
+function livePanes(): Set<string> {
 	try {
-		const out = execFileSync("tmux", ["list-sessions", "-F", "#{session_name}"], { encoding: "utf8" });
+		const out = execFileSync("tmux", ["list-panes", "-a", "-F", "#{pane_id}"], { encoding: "utf8" });
 		return new Set(out.split("\n").filter(Boolean));
 	} catch {
 		return new Set();
