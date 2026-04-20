@@ -23,14 +23,20 @@ function currentPaneSession(paneId: string): string | undefined {
 	}
 }
 
+function resolveOwner(selfPane: string): string {
+	return process.env.PI_MUX_OWNER || selfPane;
+}
+
 function onShutdown(): void {
 	if (!inTmux()) return;
 	const self = process.env.TMUX_PANE!;
+	const owner = resolveOwner(self);
 	const selfSession = currentPaneSession(self);
 	const isVisible = selfSession !== undefined && selfSession !== POOL;
 	if (isVisible) {
 		for (const sib of load()) {
 			if (sib.paneId === self) continue;
+			if (sib.owner !== owner) continue;
 			try {
 				execFileSync("tmux", ["kill-pane", "-t", sib.paneId]);
 			} catch {}
@@ -57,11 +63,13 @@ export default function (pi: ExtensionAPI) {
 			ctx.ui.notify("pi-mux active", "info");
 			return;
 		}
+		const pane = process.env.TMUX_PANE!;
 		upsert({
-			paneId: process.env.TMUX_PANE!,
+			paneId: pane,
 			sessionFile,
 			cwd: ctx.cwd,
 			pid: process.pid,
+			owner: resolveOwner(pane),
 		});
 		ctx.ui.notify("pi-mux active", "info");
 	});
@@ -76,7 +84,7 @@ export default function (pi: ExtensionAPI) {
 			ctx.ui.notify("already open in another pi-mux session, use /switch", "error");
 			return { cancel: true };
 		}
-		spawnAndSwap(`pi -e ${SELF} --session ${target}`, ctx.cwd);
+		spawnAndSwap(`pi -e ${SELF} --session ${target}`, ctx.cwd, resolveOwner(process.env.TMUX_PANE!));
 		return { cancel: true };
 	});
 
@@ -100,7 +108,7 @@ export default function (pi: ExtensionAPI) {
 			if (!forked) return;
 			newPath = forked;
 		}
-		spawnAndSwap(`pi -e ${SELF} --session ${newPath}`, ctx.cwd);
+		spawnAndSwap(`pi -e ${SELF} --session ${newPath}`, ctx.cwd, resolveOwner(process.env.TMUX_PANE!));
 		return { cancel: true };
 	});
 
@@ -149,7 +157,7 @@ export default function (pi: ExtensionAPI) {
 				execFileSync("tmux", ["swap-pane", "-s", liveEntry.paneId, "-t", self]);
 				return;
 			}
-			spawnAndSwap(`pi -e ${SELF} --session ${picked}`, cwd);
+			spawnAndSwap(`pi -e ${SELF} --session ${picked}`, cwd, resolveOwner(self));
 		},
 	});
 }

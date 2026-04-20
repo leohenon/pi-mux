@@ -8,6 +8,8 @@ export interface Entry {
 	sessionFile: string;
 	cwd: string;
 	pid: number;
+
+	owner: string;
 }
 
 const FILE = join(homedir(), ".pi-mux", "registry.json");
