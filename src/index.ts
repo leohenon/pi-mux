@@ -1,6 +1,7 @@
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { SessionManager } from "@mariozechner/pi-coding-agent";
+import { SessionManager, SessionSelectorComponent } from "@mariozechner/pi-coding-agent";
 import { load, prune, upsert } from "./registry.js";
 import { spawnAndSwap } from "./swap.js";
 
@@ -64,5 +65,54 @@ export default function (pi: ExtensionAPI) {
 		}
 		spawnAndSwap(`pi -e ${SELF} --session ${newPath}`, ctx.cwd);
 		return { cancel: true };
+	});
+
+	pi.registerCommand("switch", {
+		description: "Switch to a pi session in this folder (swap if live, spawn otherwise)",
+		handler: async (_args, ctx) => {
+			if (!inTmux()) {
+				ctx.ui.notify("not in tmux", "error");
+				return;
+			}
+			const cwd = ctx.cwd;
+			const sessionDir = ctx.sessionManager.getSessionDir();
+			const currentFile = ctx.sessionManager.getSessionFile();
+
+			const picked = await ctx.ui.custom<string | undefined>((tui, _theme, keybindings, done) => {
+				const selector = new SessionSelectorComponent(
+					(onProgress) => SessionManager.list(cwd, sessionDir, onProgress),
+					SessionManager.listAll,
+					(sessionPath: string) => done(sessionPath),
+					() => done(undefined),
+					() => done(undefined),
+					() => tui.requestRender(),
+					{
+						renameSession: async (sessionFilePath, nextName) => {
+							const next = (nextName ?? "").trim();
+							if (!next) return;
+							const mgr = SessionManager.open(sessionFilePath);
+							mgr.appendSessionInfo(next);
+						},
+						showRenameHint: true,
+						keybindings,
+					},
+					currentFile,
+				);
+				tui.setFocus(selector.getSessionList());
+				return selector;
+			});
+
+			if (!picked) return;
+			if (picked === currentFile) return;
+
+			const self = process.env.TMUX_PANE!;
+			const live = prune();
+			const liveEntry = live.find((e) => e.cwd === cwd && e.sessionFile === picked && e.paneId !== self);
+			if (liveEntry) {
+				execFileSync("tmux", ["swap-pane", "-s", liveEntry.paneId, "-t", self]);
+				return;
+			}
+			spawnAndSwap(`pi -e ${SELF} --session ${picked}`, cwd);
+		},
 	});
 }
