@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { SessionManager, SessionSelectorComponent } from "@mariozechner/pi-coding-agent";
-import { load, prune, upsert } from "./registry.js";
+import { load, prune, remove, upsert } from "./registry.js";
 import { spawnAndSwap } from "./swap.js";
 
 const SELF = fileURLToPath(import.meta.url);
@@ -11,7 +11,25 @@ function inTmux(): boolean {
 	return Boolean(process.env.TMUX && process.env.TMUX_PANE);
 }
 
+function killSiblingsAndSelf(): void {
+	if (!inTmux()) return;
+	const self = process.env.TMUX_PANE!;
+	const siblings = load().filter((e) => e.paneId !== self);
+	for (const sib of siblings) {
+		try {
+			const session = execFileSync("tmux", ["display-message", "-t", sib.paneId, "-p", "#{session_name}"], {
+				encoding: "utf8",
+			}).trim();
+			if (session) execFileSync("tmux", ["kill-session", "-t", session]);
+		} catch {}
+		remove(sib.paneId);
+	}
+	remove(self);
+}
+
 export default function (pi: ExtensionAPI) {
+	process.once("exit", killSiblingsAndSelf);
+
 	pi.on("session_start", async (_event, ctx) => {
 		if (!inTmux()) return;
 		prune();
