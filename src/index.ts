@@ -36,6 +36,22 @@ function signalReady(): void {
 	} catch {}
 }
 
+function relabelSelectorTitle(selector: SessionSelectorComponent, newTitle: string): void {
+	try {
+		const header = (selector as unknown as { header?: { render?: (w: number) => unknown } }).header;
+		if (!header || typeof header.render !== "function") return;
+		const origRender = header.render.bind(header);
+		header.render = (width: number) => {
+			const out = origRender(width);
+			if (!Array.isArray(out)) return out;
+			return out.map((line) =>
+				typeof line === "string" ? line.replace(/Resume Session/g, newTitle) : line,
+			);
+		};
+	} catch {
+	}
+}
+
 function onShutdown(): void {
 	if (!inTmux()) return;
 	const self = process.env.TMUX_PANE!;
@@ -154,6 +170,7 @@ export default function (pi: ExtensionAPI) {
 					},
 					currentFile,
 				);
+				relabelSelectorTitle(selector, "Switch Session");
 				tui.setFocus(selector.getSessionList());
 				return selector;
 			});
