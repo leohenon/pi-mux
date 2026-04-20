@@ -1,0 +1,22 @@
+{
+  "name": "pi-mux",
+  "version": "0.0.0",
+  "description": "Run multiple pi sessions concurrently in one terminal via tmux",
+  "type": "module",
+  "license": "MIT",
+  "files": [
+    "src"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@mariozechner/pi-coding-agent": "^0.67.68",
+    "typescript": "^6.0.3"
+  }
+}
