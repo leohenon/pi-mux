@@ -11,24 +11,43 @@ function inTmux(): boolean {
 	return Boolean(process.env.TMUX && process.env.TMUX_PANE);
 }
 
-function killSiblingsAndSelf(): void {
+const POOL = "_pi-mux";
+
+function currentPaneSession(paneId: string): string | undefined {
+	try {
+		return execFileSync("tmux", ["display-message", "-t", paneId, "-p", "#{session_name}"], {
+			encoding: "utf8",
+		}).trim();
+	} catch {
+		return undefined;
+	}
+}
+
+function onShutdown(): void {
 	if (!inTmux()) return;
 	const self = process.env.TMUX_PANE!;
-	const siblings = load().filter((e) => e.paneId !== self);
-	for (const sib of siblings) {
-		try {
-			const session = execFileSync("tmux", ["display-message", "-t", sib.paneId, "-p", "#{session_name}"], {
-				encoding: "utf8",
-			}).trim();
-			if (session) execFileSync("tmux", ["kill-session", "-t", session]);
-		} catch {}
-		remove(sib.paneId);
+	const selfSession = currentPaneSession(self);
+	const isVisible = selfSession !== undefined && selfSession !== POOL;
+	if (isVisible) {
+		for (const sib of load()) {
+			if (sib.paneId === self) continue;
+			try {
+				execFileSync("tmux", ["kill-pane", "-t", sib.paneId]);
+			} catch {}
+			remove(sib.paneId);
+		}
 	}
 	remove(self);
 }
 
 export default function (pi: ExtensionAPI) {
-	process.once("exit", killSiblingsAndSelf);
+	process.once("exit", onShutdown);
+	for (const sig of ["SIGHUP", "SIGTERM"] as const) {
+		process.once(sig, () => {
+			onShutdown();
+			process.exit(0);
+		});
+	}
 
 	pi.on("session_start", async (_event, ctx) => {
 		if (!inTmux()) return;
