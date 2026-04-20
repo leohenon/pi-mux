@@ -1,7 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { basename } from "node:path";
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 
 const POOL = "_pi-mux";
+const READY_DIR = join(tmpdir(), "pi-mux-ready");
 
 function shellInitForShell(shell: string): string | undefined {
 	const name = basename(shell);
@@ -43,7 +47,15 @@ export function spawnAndSwap(command: string, cwd: string, owner: string): strin
 	const pane = process.env.TMUX_PANE;
 	if (!pane) throw new Error("not in tmux");
 
-	const envArg = ["-e", `PI_MUX_OWNER=${owner}`];
+	mkdirSync(READY_DIR, { recursive: true });
+	const readyFile = join(READY_DIR, randomUUID());
+
+	const envArg = [
+		"-e",
+		`PI_MUX_OWNER=${owner}`,
+		"-e",
+		`PI_MUX_READY_FILE=${readyFile}`,
+	];
 	const shell = process.env.SHELL || "/bin/sh";
 	const init = shellInitForShell(shell);
 
@@ -65,24 +77,19 @@ export function spawnAndSwap(command: string, cwd: string, owner: string): strin
 
 	execFileSync("tmux", ["send-keys", "-t", newPane, ` set -gx PI_MUX_ARMED 1; ${command}`, "Enter"]);
 
-	waitForPaneCommand(newPane, "node", 2000);
-	sleepMs(150);
+	waitForReadyFile(readyFile, 5000);
+	try {
+		rmSync(readyFile, { force: true });
+	} catch {}
 
 	execFileSync("tmux", ["swap-pane", "-s", newPane, "-t", pane]);
 	return newPane;
 }
 
-function waitForPaneCommand(paneId: string, target: string, timeoutMs: number): void {
+function waitForReadyFile(path: string, timeoutMs: number): void {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
-		try {
-			const cmd = execFileSync("tmux", ["display-message", "-t", paneId, "-p", "#{pane_current_command}"], {
-				encoding: "utf8",
-			}).trim();
-			if (cmd === target) return;
-		} catch {
-			return;
-		}
+		if (existsSync(path)) return;
 		sleepMs(10);
 	}
 }

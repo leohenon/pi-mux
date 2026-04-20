@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { SessionManager, SessionSelectorComponent } from "@mariozechner/pi-coding-agent";
@@ -25,6 +26,14 @@ function currentPaneSession(paneId: string): string | undefined {
 
 function resolveOwner(selfPane: string): string {
 	return process.env.PI_MUX_OWNER || selfPane;
+}
+
+function signalReady(): void {
+	const readyFile = process.env.PI_MUX_READY_FILE;
+	if (!readyFile) return;
+	try {
+		writeFileSync(readyFile, "");
+	} catch {}
 }
 
 function onShutdown(): void {
@@ -61,6 +70,7 @@ export default function (pi: ExtensionAPI) {
 		const sessionFile = ctx.sessionManager.getSessionFile();
 		if (!sessionFile) {
 			ctx.ui.notify("pi-mux active", "info");
+			signalReady();
 			return;
 		}
 		const pane = process.env.TMUX_PANE!;
@@ -72,6 +82,7 @@ export default function (pi: ExtensionAPI) {
 			owner: resolveOwner(pane),
 		});
 		ctx.ui.notify("pi-mux active", "info");
+		signalReady();
 	});
 
 	pi.on("session_before_switch", async (event, ctx) => {
