@@ -343,7 +343,7 @@ export default function (pi: ExtensionAPI) {
         new Set(
           heartbeat
             .listActive()
-            .filter((e) => e.cwd === cwd && e.paneId !== self && e.busy)
+            .filter((e) => e.cwd === cwd && e.busy)
             .map((e) => e.sessionFile),
         );
 
