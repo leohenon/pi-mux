@@ -6,7 +6,13 @@ import {
   SessionManager,
   SessionSelectorComponent,
 } from "@mariozechner/pi-coding-agent";
+
+type SessionManagerLike = {
+  getSessionName(): string | undefined;
+  getBranch(): ReturnType<SessionManager["getBranch"]>;
+};
 import * as heartbeat from "./heartbeat.js";
+import { MuxMenu } from "./mux-menu.js";
 import { spawnAndSwap } from "./swap.js";
 
 const SELF = fileURLToPath(import.meta.url);
@@ -41,6 +47,40 @@ function signalReady(): void {
   try {
     writeFileSync(readyFile, "");
   } catch {}
+}
+
+function computeLabel(sm: SessionManagerLike): string | undefined {
+  const name = sm.getSessionName();
+  if (name && name.trim()) return name.trim();
+  for (const entry of sm.getBranch()) {
+    if (entry.type !== "message") continue;
+    if (entry.message.role !== "user") continue;
+    const content = entry.message.content;
+    if (typeof content === "string") {
+      const text = content.replace(/\s+/g, " ").trim();
+      if (text) return text;
+      continue;
+    }
+    for (const rawPart of content as Array<unknown>) {
+      if (typeof rawPart === "string") {
+        const text = rawPart.replace(/\s+/g, " ").trim();
+        if (text) return text;
+        continue;
+      }
+      if (
+        rawPart &&
+        typeof rawPart === "object" &&
+        (rawPart as { type?: unknown }).type === "text" &&
+        typeof (rawPart as { text?: unknown }).text === "string"
+      ) {
+        const text = (rawPart as { text: string }).text
+          .replace(/\s+/g, " ")
+          .trim();
+        if (text) return text;
+      }
+    }
+  }
+  return undefined;
 }
 
 function relabelSelectorTitle(
@@ -218,6 +258,7 @@ export default function (pi: ExtensionAPI) {
       pid: process.pid,
       owner: resolveOwner(pane),
       busy: false,
+      label: computeLabel(ctx.sessionManager),
     });
     ctx.ui.notify("pi-mux active", "info");
     signalReady();
@@ -226,11 +267,16 @@ export default function (pi: ExtensionAPI) {
   pi.on("turn_start", async () => {
     heartbeat.setBusy(true);
   });
-  pi.on("turn_end", async () => {
+  pi.on("turn_end", async (_event, ctx) => {
     heartbeat.setBusy(false);
+    heartbeat.setLabel(computeLabel(ctx.sessionManager));
   });
-  pi.on("agent_end", async () => {
+  pi.on("agent_end", async (_event, ctx) => {
     heartbeat.setBusy(false);
+    heartbeat.setLabel(computeLabel(ctx.sessionManager));
+  });
+  pi.on("message_end", async (_event, ctx) => {
+    heartbeat.setLabel(computeLabel(ctx.sessionManager));
   });
 
   pi.on("session_before_switch", async (event, ctx) => {
@@ -346,6 +392,29 @@ export default function (pi: ExtensionAPI) {
         cwd,
         resolveOwner(self),
       );
+    },
+  });
+
+  pi.registerCommand("mux", {
+    description: "List and manage backgrounded pi-mux sessions",
+    handler: async (_args, ctx) => {
+      if (!inTmux()) {
+        ctx.ui.notify("not in tmux", "error");
+        return;
+      }
+      const self = process.env.TMUX_PANE!;
+      const cwd = ctx.cwd;
+      await ctx.ui.custom<undefined>((tui, theme, _keybindings, done) => {
+        const menu = new MuxMenu({
+          tui,
+          theme,
+          currentPaneId: self,
+          currentCwd: cwd,
+          done,
+        });
+        tui.setFocus(menu);
+        return menu;
+      });
     },
   });
 }

@@ -18,6 +18,8 @@ export interface Heartbeat {
 	pid: number;
 	owner: string;
 	busy: boolean;
+	/** Session display name (user-set via /name) or first user message. */
+	label?: string;
 }
 
 const DIR = join(homedir(), ".pi-mux", "heartbeats");
@@ -54,6 +56,14 @@ export function setBusy(busy: boolean): void {
 	if (!currentEntry) return;
 	if (currentEntry.busy === busy) return;
 	currentEntry = { ...currentEntry, busy };
+	writeCurrent();
+}
+
+export function setLabel(label: string | undefined): void {
+	if (!currentEntry) return;
+	const next = label && label.trim() ? label.trim() : undefined;
+	if (currentEntry.label === next) return;
+	currentEntry = { ...currentEntry, label: next };
 	writeCurrent();
 }
 
@@ -134,6 +144,7 @@ function readEntry(full: string): Heartbeat | undefined {
 				pid: data.pid,
 				owner: data.owner,
 				busy: typeof data.busy === "boolean" ? data.busy : false,
+				label: typeof data.label === "string" ? data.label : undefined,
 			};
 		}
 	} catch {
