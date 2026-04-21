@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { SessionManager, SessionSelectorComponent } from "@mariozechner/pi-coding-agent";
-import { load, prune, remove, upsert } from "./registry.js";
+import * as heartbeat from "./heartbeat.js";
 import { spawnAndSwap } from "./swap.js";
 
 const SELF = fileURLToPath(import.meta.url);
@@ -36,6 +36,8 @@ function signalReady(): void {
 	} catch {}
 }
 
+
+
 function relabelSelectorTitle(selector: SessionSelectorComponent, newTitle: string): void {
 	try {
 		const header = (selector as unknown as { header?: { render?: (w: number) => unknown } }).header;
@@ -52,23 +54,109 @@ function relabelSelectorTitle(selector: SessionSelectorComponent, newTitle: stri
 	}
 }
 
+const SPINNER_PLACEHOLDER = "\uE000";
+const SPINNER_FRAMES = ["\u280b", "\u2819", "\u2839", "\u2838", "\u283c", "\u2834", "\u2826", "\u2827", "\u2807", "\u280f"];
+
+interface Spinner {
+	current(): string;
+	dispose(): void;
+}
+
+function createSpinner(tui: { requestRender: () => void }): Spinner {
+	let frame = 0;
+	const interval = setInterval(() => {
+		frame = (frame + 1) % SPINNER_FRAMES.length;
+		tui.requestRender();
+	}, 80);
+	return {
+		current: () => SPINNER_FRAMES[frame]!,
+		dispose: () => clearInterval(interval),
+	};
+}
+
+interface SessionLike {
+	path: string;
+	firstMessage: string;
+	name?: string;
+}
+
+interface SessionListInternals {
+	render?: (w: number) => unknown;
+	allSessions?: SessionLike[];
+	filteredSessions?: { session: SessionLike }[];
+}
+
+function attachSpinner(
+	selector: SessionSelectorComponent,
+	spinner: Spinner,
+	queryBusyPaths: () => Set<string>,
+): void {
+	const anySel = selector as unknown as {
+		sessionList?: SessionListInternals;
+		dispose?: () => void;
+	};
+	const originals = new Map<SessionLike, { name: string | undefined; firstMessage: string }>();
+	try {
+		const list = anySel.sessionList;
+		if (list && typeof list.render === "function") {
+			const origRender = list.render.bind(list);
+			list.render = (width: number) => {
+				syncSessionMarkers(list, queryBusyPaths(), originals);
+				const out = origRender(width);
+				if (!Array.isArray(out)) return out;
+				const glyph = spinner.current();
+				return out.map((line) =>
+					typeof line === "string" ? line.split(SPINNER_PLACEHOLDER).join(glyph) : line,
+				);
+			};
+		}
+	} catch {
+	}
+	const prevDispose = anySel.dispose?.bind(selector);
+	anySel.dispose = () => {
+		spinner.dispose();
+		prevDispose?.();
+	};
+}
+
+function syncSessionMarkers(
+	list: SessionListInternals,
+	busyPaths: Set<string>,
+	originals: Map<SessionLike, { name: string | undefined; firstMessage: string }>,
+): void {
+	const pool = new Set<SessionLike>();
+	for (const s of list.allSessions ?? []) pool.add(s);
+	for (const node of list.filteredSessions ?? []) pool.add(node.session);
+	for (const s of pool) {
+		const orig = originals.get(s) ?? { name: s.name, firstMessage: s.firstMessage };
+		if (!originals.has(s)) originals.set(s, orig);
+		const shouldMark = busyPaths.has(s.path);
+		if (shouldMark) {
+			if (orig.name !== undefined) s.name = `${SPINNER_PLACEHOLDER} ${orig.name}`;
+			else s.firstMessage = `${SPINNER_PLACEHOLDER} ${orig.firstMessage}`;
+		} else {
+			if (orig.name !== undefined) s.name = orig.name;
+			else s.firstMessage = orig.firstMessage;
+		}
+	}
+}
+
 function onShutdown(): void {
+	heartbeat.stop();
 	if (!inTmux()) return;
 	const self = process.env.TMUX_PANE!;
 	const owner = resolveOwner(self);
 	const selfSession = currentPaneSession(self);
 	const isVisible = selfSession !== undefined && selfSession !== POOL;
 	if (isVisible) {
-		for (const sib of load()) {
+		for (const sib of heartbeat.listActive()) {
 			if (sib.paneId === self) continue;
 			if (sib.owner !== owner) continue;
 			try {
 				execFileSync("tmux", ["kill-pane", "-t", sib.paneId]);
 			} catch {}
-			remove(sib.paneId);
 		}
 	}
-	remove(self);
 }
 
 export default function (pi: ExtensionAPI) {
@@ -82,7 +170,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		if (!inTmux()) return;
-		prune();
+		heartbeat.stop();
 		const sessionFile = ctx.sessionManager.getSessionFile();
 		if (!sessionFile) {
 			ctx.ui.notify("pi-mux active", "info");
@@ -90,15 +178,26 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 		const pane = process.env.TMUX_PANE!;
-		upsert({
+		heartbeat.start({
 			paneId: pane,
 			sessionFile,
 			cwd: ctx.cwd,
 			pid: process.pid,
 			owner: resolveOwner(pane),
+			busy: false,
 		});
 		ctx.ui.notify("pi-mux active", "info");
 		signalReady();
+	});
+
+	pi.on("turn_start", async () => {
+		heartbeat.setBusy(true);
+	});
+	pi.on("turn_end", async () => {
+		heartbeat.setBusy(false);
+	});
+	pi.on("agent_end", async () => {
+		heartbeat.setBusy(false);
 	});
 
 	pi.on("session_before_switch", async (event, ctx) => {
@@ -106,7 +205,7 @@ export default function (pi: ExtensionAPI) {
 		if (event.reason !== "resume") return;
 		const target = event.targetSessionFile;
 		if (!target) return;
-		const existing = load().find((e) => e.sessionFile === target);
+		const existing = heartbeat.listActive().find((e) => e.sessionFile === target);
 		if (existing) {
 			ctx.ui.notify("already open in another pi-mux session, use /switch", "error");
 			return { cancel: true };
@@ -150,7 +249,17 @@ export default function (pi: ExtensionAPI) {
 			const sessionDir = ctx.sessionManager.getSessionDir();
 			const currentFile = ctx.sessionManager.getSessionFile();
 
+			const self = process.env.TMUX_PANE!;
+			const queryBusyPaths = (): Set<string> =>
+				new Set(
+					heartbeat
+						.listActive()
+						.filter((e) => e.cwd === cwd && e.paneId !== self && e.busy)
+						.map((e) => e.sessionFile),
+				);
+
 			const picked = await ctx.ui.custom<string | undefined>((tui, _theme, keybindings, done) => {
+				const spinner = createSpinner(tui);
 				const selector = new SessionSelectorComponent(
 					(onProgress) => SessionManager.list(cwd, sessionDir, onProgress),
 					SessionManager.listAll,
@@ -170,7 +279,8 @@ export default function (pi: ExtensionAPI) {
 					},
 					currentFile,
 				);
-				relabelSelectorTitle(selector, "Switch Session");
+			relabelSelectorTitle(selector, "Switch Session");
+				attachSpinner(selector, spinner, queryBusyPaths);
 				tui.setFocus(selector.getSessionList());
 				return selector;
 			});
@@ -178,8 +288,7 @@ export default function (pi: ExtensionAPI) {
 			if (!picked) return;
 			if (picked === currentFile) return;
 
-			const self = process.env.TMUX_PANE!;
-			const live = prune();
+			const live = heartbeat.listActive();
 			const liveEntry = live.find((e) => e.cwd === cwd && e.sessionFile === picked && e.paneId !== self);
 			if (liveEntry) {
 				execFileSync("tmux", ["swap-pane", "-s", liveEntry.paneId, "-t", self]);
