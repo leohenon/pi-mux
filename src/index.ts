@@ -235,7 +235,21 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_before_switch", async (event, ctx) => {
     if (!inTmux()) return;
-    if (event.reason !== "resume") return;
+    if (event.reason !== "resume" && event.reason !== "new") return;
+    const owner = resolveOwner(process.env.TMUX_PANE!);
+
+    if (event.reason === "new") {
+      const sm = SessionManager.create(
+        ctx.cwd,
+        ctx.sessionManager.getSessionDir(),
+      );
+      sm.newSession({ parentSession: ctx.sessionManager.getSessionFile() });
+      const newPath = sm.getSessionFile();
+      if (!newPath) return;
+      spawnAndSwap(`pi -e ${SELF} --session ${newPath}`, ctx.cwd, owner);
+      return { cancel: true };
+    }
+
     const target = event.targetSessionFile;
     if (!target) return;
     const existing = heartbeat
@@ -248,11 +262,7 @@ export default function (pi: ExtensionAPI) {
       );
       return { cancel: true };
     }
-    spawnAndSwap(
-      `pi -e ${SELF} --session ${target}`,
-      ctx.cwd,
-      resolveOwner(process.env.TMUX_PANE!),
-    );
+    spawnAndSwap(`pi -e ${SELF} --session ${target}`, ctx.cwd, owner);
     return { cancel: true };
   });
 
