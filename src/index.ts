@@ -251,6 +251,7 @@ export default function (pi: ExtensionAPI) {
       return;
     }
     const pane = process.env.TMUX_PANE!;
+    const parentSessionFile = ctx.sessionManager.getHeader()?.parentSession;
     heartbeat.start({
       paneId: pane,
       sessionFile,
@@ -259,6 +260,7 @@ export default function (pi: ExtensionAPI) {
       owner: resolveOwner(pane),
       busy: false,
       label: computeLabel(ctx.sessionManager),
+      parentSessionFile,
     });
     ctx.ui.notify("pi-mux active", "info");
     signalReady();

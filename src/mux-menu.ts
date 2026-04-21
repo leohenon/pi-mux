@@ -18,6 +18,13 @@ const POOL = "_pi-mux";
 type Scope = "cwd" | "all";
 type Mode = "list" | "confirm-kill" | "confirm-kill-all";
 
+interface TreeRow {
+  hb: heartbeat.Heartbeat;
+  depth: number;
+  isLast: boolean;
+  ancestorContinues: boolean[];
+}
+
 export interface MuxMenuOptions {
   tui: TUI;
   theme: Theme;
@@ -31,7 +38,7 @@ export class MuxMenu extends Container implements Focusable {
   private scope: Scope = "cwd";
   private mode: Mode = "list";
   private selectedIndex = 0;
-  private rows: heartbeat.Heartbeat[] = [];
+  private rows: TreeRow[] = [];
   private pendingConfirmMessage = "";
   private readonly tui: TUI;
   private readonly theme: Theme;
@@ -82,14 +89,13 @@ export class MuxMenu extends Container implements Focusable {
     const all = heartbeat.listActive();
     const inScope =
       this.scope === "all" ? all : all.filter((e) => e.cwd === this.currentCwd);
-    inScope.sort((a, b) => a.paneId.localeCompare(b.paneId));
-    this.rows = inScope;
+    this.rows = buildHeartbeatTree(inScope);
     if (this.selectedIndex >= this.rows.length) {
       this.selectedIndex = Math.max(0, this.rows.length - 1);
     }
   }
 
-  getRows(): heartbeat.Heartbeat[] {
+  getRows(): TreeRow[] {
     return this.rows;
   }
   getPoolPanes(): Set<string> {
@@ -115,11 +121,13 @@ export class MuxMenu extends Container implements Focusable {
   }
 
   private killTargets(): heartbeat.Heartbeat[] {
-    return this.rows.filter((r) => r.paneId !== this.currentPaneId);
+    return this.rows
+      .map((r) => r.hb)
+      .filter((hb) => hb.paneId !== this.currentPaneId);
   }
 
   private selectedRow(): heartbeat.Heartbeat | undefined {
-    return this.rows[this.selectedIndex];
+    return this.rows[this.selectedIndex]?.hb;
   }
 
   handleInput(data: string): void {
@@ -265,12 +273,15 @@ class MuxList implements Component {
       lines.push(theme.fg("muted", "  (no pi sessions tracked)"));
     } else {
       for (let i = 0; i < rows.length; i++) {
-        const row = rows[i]!;
+        const node = rows[i]!;
+        const row = node.hb;
         const isCurrent = row.paneId === currentPaneId;
         const isSelected = i === selectedIndex;
         const inPool = poolPanes.has(row.paneId);
 
         const cursor = isSelected ? theme.fg("accent", "› ") : "  ";
+        const prefixPlain = buildTreePrefix(node);
+        const prefixStyled = theme.fg("dim", prefixPlain);
 
         const rawName = row.label?.trim() || "(empty session)";
         const normalizedName = rawName.replace(/[\x00-\x1f\x7f]/g, " ").trim();
@@ -286,12 +297,13 @@ class MuxList implements Component {
         const cwdShort = row.cwd.replace(process.env.HOME ?? "", "~");
 
         const cursorWidth = visibleWidth(cursor);
+        const prefixWidth = visibleWidth(prefixPlain);
         const tagWidth = visibleWidth(tagPlain);
         const cwdWidth = visibleWidth(cwdShort);
         const minGap = 6;
         const availableForName = Math.max(
           5,
-          width - cursorWidth - 1 - tagWidth - minGap - cwdWidth,
+          width - cursorWidth - prefixWidth - 1 - tagWidth - minGap - cwdWidth,
         );
         const truncatedName = truncateToWidth(
           normalizedName,
@@ -303,7 +315,7 @@ class MuxList implements Component {
           : truncatedName;
         const boldedName = isSelected ? theme.bold(styledName) : styledName;
 
-        const leftPart = `${cursor}${boldedName} ${tagStyled}`;
+        const leftPart = `${cursor}${prefixStyled}${boldedName} ${tagStyled}`;
         const leftWidth = visibleWidth(leftPart);
         const spacing = Math.max(minGap, width - leftWidth - cwdWidth);
         let line = leftPart + " ".repeat(spacing) + theme.fg("dim", cwdShort);
@@ -314,6 +326,64 @@ class MuxList implements Component {
 
     return lines;
   }
+}
+
+interface TreeNode {
+  hb: heartbeat.Heartbeat;
+  children: TreeNode[];
+}
+
+function buildHeartbeatTree(hbs: heartbeat.Heartbeat[]): TreeRow[] {
+  const byPath = new Map<string, TreeNode>();
+  for (const hb of hbs) {
+    byPath.set(hb.sessionFile, { hb, children: [] });
+  }
+  const roots: TreeNode[] = [];
+  for (const hb of hbs) {
+    const node = byPath.get(hb.sessionFile)!;
+    const parent = hb.parentSessionFile
+      ? byPath.get(hb.parentSessionFile)
+      : undefined;
+    if (parent) parent.children.push(node);
+    else roots.push(node);
+  }
+
+  const sortNodes = (nodes: TreeNode[]) => {
+    nodes.sort((a, b) => a.hb.paneId.localeCompare(b.hb.paneId));
+    for (const node of nodes) sortNodes(node.children);
+  };
+  sortNodes(roots);
+
+  const result: TreeRow[] = [];
+  const walk = (
+    node: TreeNode,
+    depth: number,
+    ancestorContinues: boolean[],
+    isLast: boolean,
+  ) => {
+    result.push({ hb: node.hb, depth, isLast, ancestorContinues });
+    for (let i = 0; i < node.children.length; i++) {
+      const childIsLast = i === node.children.length - 1;
+      const continues = depth > 0 ? !isLast : false;
+      walk(
+        node.children[i]!,
+        depth + 1,
+        [...ancestorContinues, continues],
+        childIsLast,
+      );
+    }
+  };
+  for (let i = 0; i < roots.length; i++) {
+    walk(roots[i]!, 0, [], i === roots.length - 1);
+  }
+  return result;
+}
+
+function buildTreePrefix(node: TreeRow): string {
+  if (node.depth === 0) return "";
+  const parts = node.ancestorContinues.map((c) => (c ? "│  " : "   "));
+  const branch = node.isLast ? "└─ " : "├─ ";
+  return parts.join("") + branch;
 }
 
 function listPoolPanes(): Set<string> {

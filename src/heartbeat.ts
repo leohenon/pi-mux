@@ -20,6 +20,8 @@ export interface Heartbeat {
 	busy: boolean;
 	/** Session display name (user-set via /name) or first user message. */
 	label?: string;
+	/** Path of the session this one was forked from, if any. */
+	parentSessionFile?: string;
 }
 
 const DIR = join(homedir(), ".pi-mux", "heartbeats");
@@ -140,6 +142,10 @@ function readEntry(full: string): Heartbeat | undefined {
 				owner: data.owner,
 				busy: typeof data.busy === "boolean" ? data.busy : false,
 				label: typeof data.label === "string" ? data.label : undefined,
+				parentSessionFile:
+					typeof data.parentSessionFile === "string"
+						? data.parentSessionFile
+						: undefined,
 			};
 		}
 	} catch {
