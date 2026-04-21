@@ -240,6 +240,25 @@ class MuxList implements Component {
 
     const lines: string[] = [];
     lines.push(truncateToWidth(header, width, ""));
+
+    if (mode !== "list") {
+      lines.push(
+        truncateToWidth(
+          theme.fg("error", this.parent.getPendingConfirmMessage()),
+          width,
+          "…",
+        ),
+      );
+    } else {
+      const sep = theme.fg("muted", " · ");
+      const hints = [
+        rawKeyHint("d", "kill"),
+        rawKeyHint("D", "kill all"),
+        rawKeyHint("tab", "scope"),
+        rawKeyHint("q", "close"),
+      ].join(sep);
+      lines.push(truncateToWidth(hints, width, "…"));
+    }
     lines.push("");
 
     if (rows.length === 0) {
@@ -291,20 +310,6 @@ class MuxList implements Component {
         if (isSelected) line = theme.bg("selectedBg", line);
         lines.push(truncateToWidth(line, width, ""));
       }
-    }
-
-    lines.push("");
-    if (mode !== "list") {
-      lines.push(theme.fg("error", this.parent.getPendingConfirmMessage()));
-    } else {
-      const sep = theme.fg("muted", " · ");
-      const hints = [
-        rawKeyHint("d", "kill"),
-        rawKeyHint("D", "kill all"),
-        rawKeyHint("tab", "scope"),
-        rawKeyHint("q", "close"),
-      ].join(sep);
-      lines.push(hints);
     }
 
     return lines;
