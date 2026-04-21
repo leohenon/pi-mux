@@ -4,6 +4,14 @@
   "description": "Run multiple pi sessions concurrently in one terminal via tmux",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leohenon/pi-mux.git"
+  },
+  "bugs": {
+    "url": "https://github.com/leohenon/pi-mux/issues"
+  },
+  "homepage": "https://github.com/leohenon/pi-mux#readme",
   "files": [
     "src"
   ],
