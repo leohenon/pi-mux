@@ -120,6 +120,26 @@ function poolExists(): boolean {
 	}
 }
 
+/** Override pool options that would otherwise kill sessions or leak windows. */
+function isolatePoolSession(): void {
+	const opts: [string, string][] = [
+		["destroy-unattached", "off"],
+		["remain-on-exit", "off"],
+	];
+	for (const [key, value] of opts) {
+		try {
+			execFileSync("tmux", ["set-option", "-t", POOL, key, value], {
+				stdio: "ignore",
+			});
+		} catch {}
+	}
+	try {
+		execFileSync("tmux", ["set-option", "-t", POOL, "-w", "-g", "remain-on-exit", "off"], {
+			stdio: "ignore",
+		});
+	} catch {}
+}
+
 export function spawnAndSwap(command: string, cwd: string, owner: string): string {
 	const pane = process.env.TMUX_PANE;
 	if (!pane) throw new Error("not in tmux");
@@ -145,6 +165,7 @@ export function spawnAndSwap(command: string, cwd: string, owner: string): strin
 	let newPane: string;
 	if (!poolExists()) {
 		execFileSync("tmux", ["new-session", "-d", "-s", POOL, "-c", cwd, ...envArg, ...shellArgs]);
+		isolatePoolSession();
 		newPane = execFileSync("tmux", ["display-message", "-t", POOL, "-p", "#{pane_id}"], {
 			encoding: "utf8",
 		}).trim();
