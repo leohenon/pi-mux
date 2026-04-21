@@ -227,7 +227,6 @@ export class MuxMenu extends Container implements Focusable {
 }
 
 function truncate(s: string, width: number): string {
-  // Best-effort truncation; TUI layer will visually truncate if needed.
   return s.length > width * 4 ? s.slice(0, width * 4) : s;
 }
 

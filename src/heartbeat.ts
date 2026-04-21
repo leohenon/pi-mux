@@ -88,12 +88,7 @@ export function stop(): void {
 	currentEntry = undefined;
 }
 
-/**
- * Return all pi slots with a fresh heartbeat (mtime within STALE_MS). Stops
- * responding when pi is ctrl-z'd, crashed, or otherwise paused — which is
- * the right signal for "is this session actively running and swappable."
- * Opportunistically removes stale files.
- */
+/** Pi slots with fresh heartbeat + live pid. Stale files are unlinked. */
 export function listActive(): Heartbeat[] {
 	const cutoff = Date.now() - STALE_MS;
 	const result: Heartbeat[] = [];
