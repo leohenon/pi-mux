@@ -3,14 +3,14 @@ import {
   DynamicBorder,
   rawKeyHint,
   type Theme,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import {
   Container,
   Spacer,
   truncateToWidth,
   visibleWidth,
-} from "@mariozechner/pi-tui";
-import type { Component, Focusable, TUI } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
+import type { Component, Focusable, TUI } from "@earendil-works/pi-tui";
 import * as heartbeat from "./heartbeat.js";
 
 const POOL = "_pi-mux";
