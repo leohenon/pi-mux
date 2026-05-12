@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/pi-mux?style=flat-square&logo=npm&logoColor=white&label=npm&color=1bb91f)](https://www.npmjs.com/package/pi-mux) [![node](https://img.shields.io/badge/node-%3E%3D18-1bb91f?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org) [![tmux](https://img.shields.io/badge/tmux-%3E%3D3.0-1bb91f?style=flat-square&logo=tmux&logoColor=white)](https://github.com/tmux/tmux)
 
-[Pi](https://github.com/badlogic/pi-mono) session multiplexer. Run multiple Pi sessions in one terminal via `tmux`. Switch between them without killing the one you're leaving.
+[Pi](https://github.com/earendil-works/pi) session multiplexer. Run multiple Pi sessions in one terminal via `tmux`. Switch between them without killing the one you're leaving.
 
 ![demo](https://raw.githubusercontent.com/leohenon/pi-mux/HEAD/demo.gif)
 
@@ -12,7 +12,7 @@
 pi install npm:pi-mux
 ```
 
-Requires tmux 3.0+. Run Pi inside any `tmux` session. Outside `tmux`, `pi-mux` is a no-op.
+Requires tmux 3.0+ and pi ≥ 0.74.0. Run Pi inside any `tmux` session. Outside `tmux`, `pi-mux` is a no-op.
 
 ## Commands
 

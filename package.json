@@ -1,6 +1,6 @@
 {
   "name": "pi-mux",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "Run multiple pi sessions concurrently in one terminal via tmux",
   "type": "module",
   "license": "MIT",
@@ -21,7 +21,7 @@
     ]
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": ">=0.74.0"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.74.0",
