@@ -4,7 +4,7 @@
 
 [Pi](https://github.com/earendil-works/pi) session multiplexer. Run multiple Pi sessions in one terminal via `tmux`. Switch between them without killing the one you're leaving.
 
-![demo](https://raw.githubusercontent.com/leohenon/pi-mux/HEAD/demo.gif)
+![demo](demo.gif)
 
 ## Install
 
