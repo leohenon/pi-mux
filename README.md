@@ -41,6 +41,10 @@ Each row shows cwd, session name, and a tag:
 - `[open]` — running in another tmux pane you can navigate to.
 - `[... · busy]` if mid-turn.
 
+### `/mux-status`
+
+Print whether pi-mux is active in the current Pi session.
+
 ## How it works
 
 pi-mux keeps one extra tmux session, `_pi-mux`, holding backgrounded Pis as detached windows. Spawning (`/new`, `/fork`, `/switch` to a non-live session) creates a detached window in the pool, starts Pi there, and swaps its pane into your visible pane. The Pi you just left is now in the pool, still running.

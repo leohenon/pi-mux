@@ -246,7 +246,6 @@ export default function (pi: ExtensionAPI) {
     heartbeat.stop();
     const sessionFile = ctx.sessionManager.getSessionFile();
     if (!sessionFile) {
-      ctx.ui.notify("pi-mux active", "info");
       signalReady();
       return;
     }
@@ -262,7 +261,6 @@ export default function (pi: ExtensionAPI) {
       label: computeLabel(ctx.sessionManager),
       parentSessionFile,
     });
-    ctx.ui.notify("pi-mux active", "info");
     signalReady();
   });
 
@@ -327,6 +325,17 @@ export default function (pi: ExtensionAPI) {
       resolveOwner(process.env.TMUX_PANE!),
     );
     return { cancel: true };
+  });
+
+  pi.registerCommand("mux-status", {
+    description: "Show whether pi-mux is active in this session",
+    handler: async (_args, ctx) => {
+      if (inTmux()) {
+        ctx.ui.notify("pi-mux active", "info");
+      } else {
+        ctx.ui.notify("pi-mux inactive (not in tmux)", "info");
+      }
+    },
   });
 
   pi.registerCommand("switch", {
