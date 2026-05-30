@@ -25,12 +25,17 @@ interface TreeRow {
   ancestorContinues: boolean[];
 }
 
+export interface MuxMenuSelection {
+  paneId: string;
+  inPool: boolean;
+}
+
 export interface MuxMenuOptions {
   tui: TUI;
   theme: Theme;
   currentPaneId: string;
   currentCwd: string;
-  done: (result: undefined) => void;
+  done: (result: MuxMenuSelection | undefined) => void;
 }
 
 export class MuxMenu extends Container implements Focusable {
@@ -44,7 +49,7 @@ export class MuxMenu extends Container implements Focusable {
   private readonly theme: Theme;
   private readonly currentPaneId: string;
   private readonly currentCwd: string;
-  private readonly done: (result: undefined) => void;
+  private readonly done: (result: MuxMenuSelection | undefined) => void;
   private refreshTimer?: ReturnType<typeof setInterval>;
   private poolPanes = new Set<string>();
   private readonly list: MuxList;
@@ -135,7 +140,16 @@ export class MuxMenu extends Container implements Focusable {
       this.handleConfirmInput(data);
       return;
     }
-    if (data === "\r" || data === "\n" || data === "\u001b" || data === "q") {
+    if (data === "\r" || data === "\n") {
+      const row = this.selectedRow();
+      if (!row || row.paneId === this.currentPaneId) {
+        this.done(undefined);
+        return;
+      }
+      this.done({ paneId: row.paneId, inPool: this.poolPanes.has(row.paneId) });
+      return;
+    }
+    if (data === "\u001b" || data === "q") {
       this.done(undefined);
       return;
     }
@@ -260,6 +274,7 @@ class MuxList implements Component {
     } else {
       const sep = theme.fg("muted", " · ");
       const hints = [
+        rawKeyHint("enter", "switch"),
         rawKeyHint("d", "kill"),
         rawKeyHint("D", "kill all"),
         rawKeyHint("tab", "scope"),

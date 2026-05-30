@@ -32,7 +32,7 @@ Fork your current session at any previous message, the original stays open.
 
 ### `/mux`
 
-Lists every Pi running on your machine. Kill the ones you're done with.
+Lists every Pi running on your machine. Press Enter to jump to an open Pi or bring a backgrounded one forward; kill the ones you're done with.
 
 Each row shows cwd, session name, and a tag:
 

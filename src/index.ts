@@ -12,7 +12,7 @@ type SessionManagerLike = {
   getBranch(): ReturnType<SessionManager["getBranch"]>;
 };
 import * as heartbeat from "./heartbeat.js";
-import { MuxMenu } from "./mux-menu.js";
+import { MuxMenu, type MuxMenuSelection } from "./mux-menu.js";
 import { spawnAndSwap } from "./swap.js";
 
 const SELF = fileURLToPath(import.meta.url);
@@ -407,7 +407,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("mux", {
-    description: "List and manage backgrounded pi-mux sessions",
+    description: "List, switch, and manage pi-mux sessions",
     handler: async (_args, ctx) => {
       if (!inTmux()) {
         ctx.ui.notify("not in tmux", "error");
@@ -415,17 +415,30 @@ export default function (pi: ExtensionAPI) {
       }
       const self = process.env.TMUX_PANE!;
       const cwd = ctx.cwd;
-      await ctx.ui.custom<undefined>((tui, theme, _keybindings, done) => {
-        const menu = new MuxMenu({
-          tui,
-          theme,
-          currentPaneId: self,
-          currentCwd: cwd,
-          done,
-        });
-        tui.setFocus(menu);
-        return menu;
-      });
+      const picked = await ctx.ui.custom<MuxMenuSelection | undefined>(
+        (tui, theme, _keybindings, done) => {
+          const menu = new MuxMenu({
+            tui,
+            theme,
+            currentPaneId: self,
+            currentCwd: cwd,
+            done,
+          });
+          tui.setFocus(menu);
+          return menu;
+        },
+      );
+
+      if (!picked || picked.paneId === self) return;
+      try {
+        if (picked.inPool) {
+          execFileSync("tmux", ["swap-pane", "-s", picked.paneId, "-t", self]);
+        } else {
+          execFileSync("tmux", ["switch-client", "-t", picked.paneId]);
+        }
+      } catch {
+        ctx.ui.notify("failed to switch session", "error");
+      }
     },
   });
 }
