@@ -1,10 +1,8 @@
 # pi-mux
 
-[![npm](https://img.shields.io/npm/v/pi-mux?style=flat-square&logo=npm&logoColor=white&label=npm&color=1bb91f)](https://www.npmjs.com/package/pi-mux) [![tmux](https://img.shields.io/badge/tmux-%3E%3D3.0-1bb91f?style=flat-square&logo=tmux&logoColor=white)](https://github.com/tmux/tmux)
+[![npm](https://img.shields.io/npm/v/pi-mux?style=flat-square&logo=npm&logoColor=white&label=npm&color=1bb91f)](https://www.npmjs.com/package/pi-mux)
 
-[Pi](https://github.com/earendil-works/pi) session multiplexer. Run multiple Pi sessions in one terminal via `tmux`. Switch between them without killing the one you're leaving.
-
-![demo](demo.gif)
+Run multiple Pi sessions in one terminal via `tmux`. Switch between them without killing the one you're leaving.
 
 ## Install
 
@@ -71,7 +69,3 @@ Backgrounded Pis idle at ~0% CPU and use memory equivalent to one Pi session eac
 ## Contributing
 
 Bug reports, feature ideas, and PRs welcome — see [CONTRIBUTING.md](https://github.com/leohenon/pi-mux/blob/HEAD/CONTRIBUTING.md).
-
-## License
-
-MIT

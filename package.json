@@ -1,6 +1,6 @@
 {
   "name": "pi-mux",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Run multiple pi sessions concurrently in one terminal via tmux",
   "type": "module",
   "license": "MIT",
